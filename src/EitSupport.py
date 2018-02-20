@@ -23,7 +23,6 @@
 import os
 import struct
 import time
-import chardet
 
 from datetime import datetime
 
@@ -46,6 +45,23 @@ from MetaSupport import getInfoFile
 #				crc = crc ^ poly
 #			crc = crc & 0xffffffffL
 #	return crc
+
+decoding_charSpecHR = {u'Ć': u'\u0106', u'æ': u'\u0107', u'®': u'\u017D', u'¾': u'\u017E', u'©': u'\u0160', u'¹': u'\u0161', u'Č': u'\u010C', u'è': u'\u010D', u'ð': u'\u0111'}
+
+decoding_charSpecCZSK = {u'Ï'+u'C': u'Č',u'Ï'+u'E': u'Ě',u'Ï'+u'L': u'Ľ',u'Ï'+u'N': u'Ň',u'Ï'+u'R': u'Ř',u'Ï'+u'S': u'Š',u'Ï'+u'T': u'Ť',u'Ï'+u'Z': u'Ž',u'Ï'+u'c': u'č',u'Ï'+u'd': u'ď',u'Ï'+u'e': u'ě',u'Ï'+u'l': u'ľ', u'Ï'+u'n': u'ň',
+u'Ï'+u'r': u'ř',u'Ï'+u's': u'š',u'Ï'+u't': u'ť',u'Ï'+u'z': u'ž',u'Ï'+u'D': u'Ď',u'Â'+u'A': u'Á',u'Â'+u'E': u'É',u'Â'+u'I': u'Í',u'Â'+u'O': u'Ó',u'Â'+u'U': u'Ú',u'Â'+u'a': u'á',u'Â'+u'e': u'é',u'Â'+u'i': u'í',u'Â'+u'o': u'ó',
+u'Â'+u'u': u'ú',u'Â'+u'y': u'ý',u'Ã'+u'o': u'ô',u'Ã'+u'O': u'Ô',u'Ê'+u'u': u'ů',u'Ê'+u'U': u'Ů',u'È'+u'A': u'Ä',u'È'+u'E': u'Ë',u'È'+u'I': u'Ï',u'È'+u'O': u'Ö',u'È'+u'U': u'Ü',u'È'+u'Y': u'Ÿ',u'È'+u'a': u'ä',u'È'+u'e': u'ë',
+u'È'+u'i': u'ï',u'È'+u'o': u'ö',u'È'+u'u': u'ü',u'È'+u'y': u'ÿ'}
+
+def convertCharSpecHR(text):
+	for i, j in decoding_charSpecHR.iteritems():
+		text = text.replace(i, j)
+	return text
+
+def convertCharSpecCZSK(text):
+	for i, j in decoding_charSpecCZSK.iteritems():
+		text = text.replace(i, j)
+	return text
 
 def parseMJD(MJD):
 	# Parse 16 bit unsigned int containing Modified Julian Date,
@@ -73,6 +89,10 @@ def language_iso639_2to3(alpha2):
 				if len(alpha) == 3:
 					return alpha
 	return ret
+#TEST
+#print LanguageCodes["sv"]
+#print language_iso639_2to3("sv")
+
 
 # Eit File support class
 # Description
@@ -190,7 +210,8 @@ class EitList():
 		data = ""
 		path = self.eit_file
 
-		lang = (language_iso639_2to3(config.EMC.epglang.value.lower()[:2])).upper()
+		#lang = language.getLanguage()[:2]
+		lang = (language_iso639_2to3( config.EMC.epglang.value.lower()[:2] )).upper()
 
 		if path and os.path.exists(path):
 			mtime = os.path.getmtime(path)
@@ -270,7 +291,7 @@ class EitList():
 								if str(ord(data[i]))=="138":
 									short_event_description += '\n'
 								else:
-									if data[i]== '\x10' or data[i]== '\x00' or data[i]== '\x02' or data[i]== '\x05':
+									if data[i]== '\x10' or data[i]== '\x00' or  data[i]== '\x02' or  data[i]== '\x05':
 										pass
 									else:
 										short_event_description += data[i]
@@ -296,7 +317,7 @@ class EitList():
 									extended_event_description += '\n'
 									extended_event_description_multi += '\n'
 								else:
-									if data[i]== '\x10' or data[i]== '\x00' or data[i]== '\x02' or data[i]== '\x05' or data[i]== '\xc2':
+									if data[i]== '\x10' or data[i]== '\x00' or  data[i]== '\x02' or  data[i]== '\x05':
 										pass
 									else:
 										extended_event_description += data[i]
@@ -350,37 +371,55 @@ class EitList():
 						extended_event_descriptor = short_event_descriptor
 
 					if name_event_descriptor:
+						#try:
+						#	name_event_descriptor = name_event_descriptor.decode("iso-8859-1").encode("utf-8")
+						#except UnicodeDecodeError:
+						#	pass
 						try:
 							name_event_descriptor.decode('utf-8')
 						except UnicodeDecodeError:
+							# We can't do this, this breaks encoding of e.g. "Das Erste"
 							try:
 								name_event_descriptor = name_event_descriptor.decode("cp1252").encode("utf-8")
 							except UnicodeDecodeError:
-								name_event_descriptor = name_event_descriptor.decode("iso-8859-1").encode("utf-8")
+								# do nothing, otherwise cyrillic wont properly displayed
+								#name_event_descriptor = name_event_descriptor.decode("iso-8859-1").encode("utf-8")
+								pass
 					self.eit['name'] = name_event_descriptor
 
 					if short_event_descriptor:
+						#try:
+						#	short_event_descriptor = short_event_descriptor.decode("iso-8859-1").encode("utf-8")
+						#except UnicodeDecodeError:
+						#	pass
 						try:
 							short_event_descriptor.decode('utf-8')
 						except UnicodeDecodeError:
+							# We can't do this, this breaks encoding of e.g. "Das Erste"
 							try:
 								short_event_descriptor = short_event_descriptor.decode("cp1252").encode("utf-8")
 							except UnicodeDecodeError:
-								short_event_descriptor = short_event_descriptor.decode("iso-8859-1").encode("utf-8")
+								# do nothing, otherwise cyrillic wont properly displayed
+								#short_event_descriptor = short_event_descriptor.decode("iso-8859-1").encode("utf-8")
+								pass
 					self.eit['short_description'] = short_event_descriptor
 
 					if extended_event_descriptor:
+						#try:
+						#	extended_event_descriptor = extended_event_descriptor.decode("iso-8859-1").encode("utf-8")
+						#except UnicodeDecodeError:
+						#	pass
 						try:
-							encdata = chardet.detect(extended_event_descriptor)
-							enc = encdata['encoding'].lower()
-							confidence = str(encdata['confidence'])
-							emcDebugOut("[META] Detected encoding-type: " + enc + " (" + confidence + ")")
-							if enc == "utf-8":
-								extended_event_descriptor.decode(enc)
-							else:
-								extended_event_descriptor = extended_event_descriptor.decode(enc).encode('utf-8')
-						except (UnicodeDecodeError, AttributeError), e:
-							emcDebugOut("[META] Exception in readEitFile: " + str(e))
+							extended_event_descriptor.decode('utf-8')
+						except UnicodeDecodeError:
+							# We can't do this, this breaks encoding of e.g. "Das Erste"
+							try:
+								extended_event_descriptor = extended_event_descriptor.decode("cp1252").encode("utf-8")
+							except UnicodeDecodeError:
+								# do nothing, otherwise cyrillic wont properly displayed
+								#extended_event_descriptor = extended_event_descriptor.decode("iso-8859-1").encode("utf-8")
+								pass
+					self.eit['description'] = extended_event_descriptor
 					self.eit['description'] = extended_event_descriptor
 
 				else:
