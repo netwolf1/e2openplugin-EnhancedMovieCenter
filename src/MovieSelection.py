@@ -20,7 +20,6 @@
 #
 
 import os
-import chardet
 from time import time
 #from thread import start_new_thread
 from threading import Thread
